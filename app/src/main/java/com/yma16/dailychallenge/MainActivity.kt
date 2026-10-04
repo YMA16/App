@@ -1,13 +1,17 @@
 package com.yma16.dailychallenge
 
 import android.content.SharedPreferences
+import android.icu.text.DateFormat
 import android.icu.util.HebrewCalendar
+import java.util.Date
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -94,7 +98,7 @@ private fun DailyChallenge(prefs: SharedPreferences) {
             Modifier.fillMaxSize().background(Brush.verticalGradient(background))
         ) {
             Column(
-                Modifier.fillMaxSize().padding(horizontal = 18.dp).padding(top = 20.dp, bottom = 20.dp),
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp).padding(top = 20.dp, bottom = 28.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -157,7 +161,7 @@ private fun DailyChallenge(prefs: SharedPreferences) {
                 Panel(card) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = { month = month.minusMonths(1) }) { Icon(Icons.Default.ChevronLeft, null, tint = fg) }
-                        Text(month.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale("he"))), color = fg, modifier = Modifier.weight(1f), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
+                        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) { Text(month.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale("he"))), color = fg, textAlign = TextAlign.Center, fontWeight = FontWeight.Bold); Text("לוח לועזי · תאריך עברי בבחירת יום", color = muted, fontSize = 10.sp) }
                         IconButton(onClick = { month = month.plusMonths(1) }) { Icon(Icons.Default.ChevronRight, null, tint = fg) }
                     }
                     Row(Modifier.fillMaxWidth()) {
@@ -233,12 +237,20 @@ private fun Metric(label: String, value: String, fg: Color, muted: Color) {
     }
 }
 
-private fun gregorianHebrewDate(date: LocalDate): String =
-    date.format(DateTimeFormatter.ofPattern("EEEE, d בMMMM yyyy", Locale("he"))) + " · " + hebrewDate(date)
+private fun gregorianHebrewDate(date: LocalDate): String {
+    val gregorian = DateFormat.getDateInstance(DateFormat.FULL, Locale("he", "IL"))
+    val civil = date.atTime(12, 0).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+    val gregorianText = gregorian.format(Date(civil))
+    return "$gregorianText · ${hebrewDate(date)}"
+}
 
+/** ICU performs the Hebrew calendar conversion, including leap-year Adar handling. */
 private fun hebrewDate(date: LocalDate): String = runCatching {
-    val calendar = HebrewCalendar()
-    calendar.timeInMillis = date.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
-    val months = arrayOf("תשרי", "חשוון", "כסלו", "טבת", "שבט", "אדר א׳", "אדר", "ניסן", "אייר", "סיוון", "תמוז", "אב", "אלול")
-    "${calendar.get(HebrewCalendar.DAY_OF_MONTH)} ב${months[calendar.get(HebrewCalendar.MONTH).coerceIn(0, 12)]} ${calendar.get(HebrewCalendar.YEAR)}"
-}.getOrDefault("")
+    val millis = date.atTime(12, 0).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+    val calendar = HebrewCalendar().apply { timeInMillis = millis }
+    val formatter = DateFormat.getDateInstance(DateFormat.LONG, Locale("he", "IL")).apply {
+        setCalendar(calendar)
+        timeZone = calendar.timeZone
+    }
+    formatter.format(Date(millis))
+}.getOrElse { "תאריך עברי לא זמין" }
